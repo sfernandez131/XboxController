@@ -312,6 +312,18 @@ namespace XboxRemoteControl
                     case "RightTrigger":
                         psController.SetSliderValue(DualShock4Slider.RightTrigger, isKeyDown ? (byte)255 : (byte)0);
                         break;
+                    case "RightStickUp":
+                        psController.SetAxisValue(DualShock4Axis.RightThumbY, isKeyDown ? byte.MaxValue : (byte)0);
+                        break;
+                    case "RightStickDown":
+                        psController.SetAxisValue(DualShock4Axis.RightThumbY, isKeyDown ? byte.MaxValue : (byte)0);
+                        break;
+                    case "RightStickLeft":
+                        psController.SetAxisValue(DualShock4Axis.RightThumbX, isKeyDown ? byte.MaxValue : (byte)0);
+                        break;
+                    case "RightStickRight":
+                        psController.SetAxisValue(DualShock4Axis.RightThumbX, isKeyDown ? byte.MaxValue : (byte)0);
+                        break;
                     default:
                         Console.WriteLine($"No command action defined for {command}");
                         break;
