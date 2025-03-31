@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using Nefarius.ViGEm.Client;
 using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
+using Nefarius.ViGEm.Client.Targets.DualShock4;
 using Gma.System.MouseKeyHook;
 
 namespace XboxRemoteControl
@@ -12,11 +13,19 @@ namespace XboxRemoteControl
     // Used in script mode to define each input command.
     public record ScriptInput(string Command, bool IsKeyDown, int DelayMs);
 
+    public enum ControllerType
+    {
+        Xbox360,
+        DualShock4
+    }
+
     class Program
     {
-        private static IXbox360Controller controller;
+        private static IDualShock4Controller psController;
+        private static IXbox360Controller xBoxController;
         private static ViGEmClient client;
         private static IKeyboardMouseEvents globalHook;
+        private static ControllerType selectedController;
 
         static async Task Main(string[] args)
         {
@@ -24,7 +33,8 @@ namespace XboxRemoteControl
             {
                 if (args.Length == 0)
                 {
-                    Console.WriteLine("Xbox Remote Play Keyboard Control");
+                    Console.WriteLine("Xbox/PlayStation Remote Play Keyboard Control");
+                    Console.WriteLine("Your mouse may get choppy but you will be able to close the tool.");
                     Console.WriteLine("Type 's' for script mode, type 'i' for input mode.");
                 RETRY:
                     var input = Console.ReadLine();
@@ -43,11 +53,34 @@ namespace XboxRemoteControl
                     }
                 }
 
+                // Ask user which controller to use.
+                Console.WriteLine("Select controller type: (X) for Xbox 360 or (D) for DualShock 4");
+                var controllerInput = Console.ReadLine();
+                if (controllerInput.Equals("D", StringComparison.OrdinalIgnoreCase))
+                {
+                    selectedController = ControllerType.DualShock4;
+                }
+                else
+                {
+                    selectedController = ControllerType.Xbox360;
+                }
+
                 // Create and connect the virtual controller
                 client = new ViGEmClient();
-                controller = client.CreateXbox360Controller();
-                controller.Connect();
-                Console.WriteLine("Virtual Xbox 360 Controller created and connected.");
+                if (selectedController == ControllerType.Xbox360)
+                {
+                    // Initialize DualShock4 controller for compatibility if needed.
+                    psController = client.CreateDualShock4Controller();
+                    xBoxController = client.CreateXbox360Controller();
+                    xBoxController.Connect();
+                    Console.WriteLine("Virtual Xbox 360 Controller created and connected.");
+                }
+                else if (selectedController == ControllerType.DualShock4)
+                {
+                    psController = client.CreateDualShock4Controller();
+                    psController.Connect();
+                    Console.WriteLine("Virtual DualShock 4 Controller created and connected.");
+                }
 
                 bool scriptMode = args.Length > 0 &&
                                   args[0].Equals("script", StringComparison.OrdinalIgnoreCase);
@@ -111,7 +144,7 @@ namespace XboxRemoteControl
             if (!string.IsNullOrEmpty(command))
             {
                 // On key down, set button state to true.
-                Task.Run(() => SendXboxCommand(command, true));
+                Task.Run(() => SendControllerCommand(command, true));
             }
         }
 
@@ -121,7 +154,7 @@ namespace XboxRemoteControl
             if (!string.IsNullOrEmpty(command))
             {
                 // On key up, set button state back to false.
-                Task.Run(() => SendXboxCommand(command, false));
+                Task.Run(() => SendControllerCommand(command, false));
             }
         }
 
@@ -161,88 +194,129 @@ namespace XboxRemoteControl
             }
         }
 
-        private static async Task SendXboxCommand(string command, bool isKeyDown)
+        private static async Task SendControllerCommand(string command, bool isKeyDown)
         {
-            if (controller == null)
-                return;
-
-            switch (command)
+            if (selectedController == ControllerType.Xbox360)
             {
-                case "Up":
-                    controller.SetButtonState(Xbox360Button.Up, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "Down":
-                    controller.SetButtonState(Xbox360Button.Down, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "Left":
-                    controller.SetButtonState(Xbox360Button.Left, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "Right":
-                    controller.SetButtonState(Xbox360Button.Right, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "A":
-                    controller.SetButtonState(Xbox360Button.A, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "B":
-                    controller.SetButtonState(Xbox360Button.B, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "X":
-                    controller.SetButtonState(Xbox360Button.X, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "Y":
-                    controller.SetButtonState(Xbox360Button.Y, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "LeftShoulder":
-                    controller.SetButtonState(Xbox360Button.LeftShoulder, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "RightShoulder":
-                    controller.SetButtonState(Xbox360Button.RightShoulder, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "Back":
-                    controller.SetButtonState(Xbox360Button.Back, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "Start":
-                    controller.SetButtonState(Xbox360Button.Start, isKeyDown);
-                    controller.SubmitReport();
-                    break;
-                case "LeftTrigger":
-                    controller.SetSliderValue(Xbox360Slider.LeftTrigger, isKeyDown ? (byte)255 : (byte)0);
-                    controller.SubmitReport();
-                    break;
-                case "RightTrigger":
-                    controller.SetSliderValue(Xbox360Slider.RightTrigger, isKeyDown ? (byte)255 : (byte)0);
-                    controller.SubmitReport();
-                    break;
-                case "RightStickUp":
-                    controller.SetAxisValue(Xbox360Axis.RightThumbY, isKeyDown ? short.MaxValue : (short)0);
-                    controller.SubmitReport();
-                    break;
-                case "RightStickDown":
-                    controller.SetAxisValue(Xbox360Axis.RightThumbY, isKeyDown ? short.MinValue : (short)0);
-                    controller.SubmitReport();
-                    break;
-                case "RightStickLeft":
-                    controller.SetAxisValue(Xbox360Axis.RightThumbX, isKeyDown ? short.MinValue : (short)0);
-                    controller.SubmitReport();
-                    break;
-                case "RightStickRight":
-                    controller.SetAxisValue(Xbox360Axis.RightThumbX, isKeyDown ? short.MaxValue : (short)0);
-                    controller.SubmitReport();
-                    break;
-                default:
-                    Console.WriteLine($"No command action defined for {command}");
-                    break;
+                if (xBoxController == null)
+                    return;
+
+                switch (command)
+                {
+                    case "Up":
+                        xBoxController.SetButtonState(Xbox360Button.Up, isKeyDown);
+                        break;
+                    case "Down":
+                        xBoxController.SetButtonState(Xbox360Button.Down, isKeyDown);
+                        break;
+                    case "Left":
+                        xBoxController.SetButtonState(Xbox360Button.Left, isKeyDown);
+                        break;
+                    case "Right":
+                        xBoxController.SetButtonState(Xbox360Button.Right, isKeyDown);
+                        break;
+                    case "A":
+                        xBoxController.SetButtonState(Xbox360Button.A, isKeyDown);
+                        break;
+                    case "B":
+                        xBoxController.SetButtonState(Xbox360Button.B, isKeyDown);
+                        break;
+                    case "X":
+                        xBoxController.SetButtonState(Xbox360Button.X, isKeyDown);
+                        break;
+                    case "Y":
+                        xBoxController.SetButtonState(Xbox360Button.Y, isKeyDown);
+                        break;
+                    case "LeftShoulder":
+                        xBoxController.SetButtonState(Xbox360Button.LeftShoulder, isKeyDown);
+                        break;
+                    case "RightShoulder":
+                        xBoxController.SetButtonState(Xbox360Button.RightShoulder, isKeyDown);
+                        break;
+                    case "Back":
+                        xBoxController.SetButtonState(Xbox360Button.Back, isKeyDown);
+                        break;
+                    case "Start":
+                        xBoxController.SetButtonState(Xbox360Button.Start, isKeyDown);
+                        break;
+                    case "LeftTrigger":
+                        xBoxController.SetSliderValue(Xbox360Slider.LeftTrigger, isKeyDown ? (byte)255 : (byte)0);
+                        break;
+                    case "RightTrigger":
+                        xBoxController.SetSliderValue(Xbox360Slider.RightTrigger, isKeyDown ? (byte)255 : (byte)0);
+                        break;
+                    case "RightStickUp":
+                        xBoxController.SetAxisValue(Xbox360Axis.RightThumbY, isKeyDown ? short.MaxValue : (short)0);
+                        break;
+                    case "RightStickDown":
+                        xBoxController.SetAxisValue(Xbox360Axis.RightThumbY, isKeyDown ? short.MinValue : (short)0);
+                        break;
+                    case "RightStickLeft":
+                        xBoxController.SetAxisValue(Xbox360Axis.RightThumbX, isKeyDown ? short.MinValue : (short)0);
+                        break;
+                    case "RightStickRight":
+                        xBoxController.SetAxisValue(Xbox360Axis.RightThumbX, isKeyDown ? short.MaxValue : (short)0);
+                        break;
+                    default:
+                        Console.WriteLine($"No command action defined for {command}");
+                        break;
+                }
+                xBoxController.SubmitReport();
+            }
+            else if (selectedController == ControllerType.DualShock4)
+            {
+                if (psController == null)
+                    return;
+
+                switch (command)
+                {
+                    case "Up":
+                        psController.SetDPadDirection(isKeyDown ? DualShock4DPadDirection.North : DualShock4DPadDirection.None);
+                        break;
+                    case "Down":
+                        psController.SetDPadDirection(isKeyDown ? DualShock4DPadDirection.South : DualShock4DPadDirection.None);
+                        break;
+                    case "Left":
+                        psController.SetDPadDirection(isKeyDown ? DualShock4DPadDirection.West : DualShock4DPadDirection.None);
+                        break;
+                    case "Right":
+                        psController.SetDPadDirection(isKeyDown ? DualShock4DPadDirection.East : DualShock4DPadDirection.None);
+                        break;
+                    case "A":
+                        psController.SetButtonState(DualShock4Button.Cross, isKeyDown);
+                        break;
+                    case "B":
+                        psController.SetButtonState(DualShock4Button.Circle, isKeyDown);
+                        break;
+                    case "X":
+                        psController.SetButtonState(DualShock4Button.Square, isKeyDown);
+                        break;
+                    case "Y":
+                        psController.SetButtonState(DualShock4Button.Triangle, isKeyDown);
+                        break;
+                    case "LeftShoulder":
+                        psController.SetButtonState(DualShock4Button.ShoulderLeft, isKeyDown);
+                        break;
+                    case "RightShoulder":
+                        psController.SetButtonState(DualShock4Button.ShoulderRight, isKeyDown);
+                        break;
+                    case "Back":
+                        psController.SetButtonState(DualShock4Button.Share, isKeyDown);
+                        break;
+                    case "Start":
+                        psController.SetButtonState(DualShock4Button.Options, isKeyDown);
+                        break;
+                    case "LeftTrigger":
+                        psController.SetSliderValue(DualShock4Slider.LeftTrigger, isKeyDown ? (byte)255 : (byte)0);
+                        break;
+                    case "RightTrigger":
+                        psController.SetSliderValue(DualShock4Slider.RightTrigger, isKeyDown ? (byte)255 : (byte)0);
+                        break;
+                    default:
+                        Console.WriteLine($"No command action defined for {command}");
+                        break;
+                }
+                psController.SubmitReport();
             }
             Console.Write($"\r{command} " + (isKeyDown ? "Pressed" : "Released"));
             await Task.CompletedTask;
@@ -253,9 +327,8 @@ namespace XboxRemoteControl
             // Prompt the user for the script chain and extra delay value.
             Console.WriteLine("Enter your chain of inputs as a comma separated list.");
             Console.WriteLine("Each input should be in the format: Command;IsKeyDown;DelayMs");
-            Console.WriteLine("Example:");
-            Console.WriteLine("Right;true;100,Right;false;100,Left;true;100,Left;false;100");
-            Console.WriteLine("Or type 'cr' for a predefined script to move the camera right slowly for two seconds, then stop, and repeat.");
+            Console.WriteLine("Commands are case sensitive.");
+            Console.WriteLine("Type 'cr' for a predefined script to move the camera right slowly for two seconds, then stop.");
             var inputChain = Console.ReadLine();
 
             ScriptInput[] inputs;
@@ -264,7 +337,7 @@ namespace XboxRemoteControl
                 inputs = new ScriptInput[]
                 {
                     new ScriptInput("RightStickRight", true, 2000),
-                    new ScriptInput("RightStickRight", false, 1000),
+                    new ScriptInput("RightStickRight", false, 1000)
                 };
             }
             else
@@ -294,7 +367,7 @@ namespace XboxRemoteControl
             int index = 0;
             while (true)
             {
-                await SendXboxCommand(inputs[index].Command, inputs[index].IsKeyDown);
+                await SendControllerCommand(inputs[index].Command, inputs[index].IsKeyDown);
                 await Task.Delay(inputs[index].DelayMs);
 
                 int nextIndex = (index + 1) % inputs.Length;
@@ -315,9 +388,13 @@ namespace XboxRemoteControl
                 globalHook.KeyUp -= GlobalHookKeyUp;
                 globalHook.Dispose();
             }
-            if (controller != null)
+            if (selectedController == ControllerType.Xbox360 && xBoxController != null)
             {
-                controller.Disconnect();
+                xBoxController.Disconnect();
+            }
+            else if (selectedController == ControllerType.DualShock4 && psController != null)
+            {
+                psController.Disconnect();
             }
             if (client != null)
             {
@@ -328,5 +405,3 @@ namespace XboxRemoteControl
         }
     }
 }
-
-
