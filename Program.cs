@@ -1,4 +1,8 @@
-﻿using Nefarius.ViGEm.Client;
+﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using Nefarius.ViGEm.Client;
 using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
 using Gma.System.MouseKeyHook;
@@ -21,7 +25,6 @@ namespace XboxRemoteControl
                 if (args.Length == 0)
                 {
                     Console.WriteLine("Xbox Remote Play Keyboard Control");
-                    Console.WriteLine("Your mouse may get choppy but you will be able to close the tool.");
                     Console.WriteLine("Type 's' for script mode, type 'i' for input mode.");
                 RETRY:
                     var input = Console.ReadLine();
@@ -77,6 +80,7 @@ namespace XboxRemoteControl
                     Console.WriteLine("  M - Start");
                     Console.WriteLine("  Z - Left Trigger");
                     Console.WriteLine("  X - Right Trigger");
+                    Console.WriteLine("  Shift + Arrow Keys - Right Stick");
                     Console.WriteLine("Press Q or Escape to quit.");
 
                     globalHook.KeyDown += GlobalHookKeyDown;
@@ -103,7 +107,7 @@ namespace XboxRemoteControl
                 return;
             }
 
-            string command = MapKey(e.KeyCode);
+            string command = MapKey(e.KeyCode, e.Shift);
             if (!string.IsNullOrEmpty(command))
             {
                 // On key down, set button state to true.
@@ -113,7 +117,7 @@ namespace XboxRemoteControl
 
         private static void GlobalHookKeyUp(object sender, KeyEventArgs e)
         {
-            string command = MapKey(e.KeyCode);
+            string command = MapKey(e.KeyCode, e.Shift);
             if (!string.IsNullOrEmpty(command))
             {
                 // On key up, set button state back to false.
@@ -121,26 +125,40 @@ namespace XboxRemoteControl
             }
         }
 
-        private static string MapKey(Keys key)
+        private static string MapKey(Keys key, bool shift)
         {
-            return key switch
+            if (shift)
             {
-                Keys.W => "Up",
-                Keys.A => "Left",
-                Keys.S => "Down",
-                Keys.D => "Right",
-                Keys.J => "A",
-                Keys.K => "B",
-                Keys.U => "X",
-                Keys.I => "Y",
-                Keys.O => "LeftShoulder",
-                Keys.P => "RightShoulder",
-                Keys.N => "Back",
-                Keys.M => "Start",
-                Keys.Z => "LeftTrigger",
-                Keys.X => "RightTrigger",
-                _ => string.Empty,
-            };
+                return key switch
+                {
+                    Keys.Up => "RightStickUp",
+                    Keys.Down => "RightStickDown",
+                    Keys.Left => "RightStickLeft",
+                    Keys.Right => "RightStickRight",
+                    _ => string.Empty,
+                };
+            }
+            else
+            {
+                return key switch
+                {
+                    Keys.W => "Up",
+                    Keys.A => "Left",
+                    Keys.S => "Down",
+                    Keys.D => "Right",
+                    Keys.J => "A",
+                    Keys.K => "B",
+                    Keys.U => "X",
+                    Keys.I => "Y",
+                    Keys.O => "LeftShoulder",
+                    Keys.P => "RightShoulder",
+                    Keys.N => "Back",
+                    Keys.M => "Start",
+                    Keys.Z => "LeftTrigger",
+                    Keys.X => "RightTrigger",
+                    _ => string.Empty,
+                };
+            }
         }
 
         private static async Task SendXboxCommand(string command, bool isKeyDown)
@@ -206,6 +224,22 @@ namespace XboxRemoteControl
                     controller.SetSliderValue(Xbox360Slider.RightTrigger, isKeyDown ? (byte)255 : (byte)0);
                     controller.SubmitReport();
                     break;
+                case "RightStickUp":
+                    controller.SetAxisValue(Xbox360Axis.RightThumbY, isKeyDown ? short.MaxValue : (short)0);
+                    controller.SubmitReport();
+                    break;
+                case "RightStickDown":
+                    controller.SetAxisValue(Xbox360Axis.RightThumbY, isKeyDown ? short.MinValue : (short)0);
+                    controller.SubmitReport();
+                    break;
+                case "RightStickLeft":
+                    controller.SetAxisValue(Xbox360Axis.RightThumbX, isKeyDown ? short.MinValue : (short)0);
+                    controller.SubmitReport();
+                    break;
+                case "RightStickRight":
+                    controller.SetAxisValue(Xbox360Axis.RightThumbX, isKeyDown ? short.MaxValue : (short)0);
+                    controller.SubmitReport();
+                    break;
                 default:
                     Console.WriteLine($"No command action defined for {command}");
                     break;
@@ -219,32 +253,37 @@ namespace XboxRemoteControl
             // Prompt the user for the script chain and extra delay value.
             Console.WriteLine("Enter your chain of inputs as a comma separated list.");
             Console.WriteLine("Each input should be in the format: Command;IsKeyDown;DelayMs");
-            Console.WriteLine("These commans are case sensitive.");
-            Console.WriteLine("Type default to just use the example.");
             Console.WriteLine("Example:");
             Console.WriteLine("Right;true;100,Right;false;100,Left;true;100,Left;false;100");
+            Console.WriteLine("Or type 'cr' for a predefined script to move the camera right slowly for two seconds, then stop, and repeat.");
             var inputChain = Console.ReadLine();
 
             ScriptInput[] inputs;
-            try
+            if (inputChain.Equals("cr", StringComparison.OrdinalIgnoreCase))
             {
-                if (inputChain.Equals("default", StringComparison.OrdinalIgnoreCase))
+                inputs = new ScriptInput[]
                 {
-                    inputChain = "Right;true;100,Right;false;100,Left;true;100,Left;false;100";
-                }
-
-                inputs = inputChain.Split(',')
-                              .Select(x =>
-                              {
-                                  var parts = x.Split(';');
-                                  return new ScriptInput(parts[0].Trim(), bool.Parse(parts[1].Trim()), int.Parse(parts[2].Trim()));
-                              })
-                              .ToArray();
+                    new ScriptInput("RightStickRight", true, 2000),
+                    new ScriptInput("RightStickRight", false, 1000),
+                };
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine("Error parsing input: " + ex.Message);
-                return;
+                try
+                {
+                    inputs = inputChain.Split(',')
+                                  .Select(x =>
+                                  {
+                                      var parts = x.Split(';');
+                                      return new ScriptInput(parts[0].Trim(), bool.Parse(parts[1].Trim()), int.Parse(parts[2].Trim()));
+                                  })
+                                  .ToArray();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error parsing input: " + ex.Message);
+                    return;
+                }
             }
 
             Console.WriteLine("Enter extra delay between input pairs in milliseconds (e.g., 500):");
@@ -289,3 +328,5 @@ namespace XboxRemoteControl
         }
     }
 }
+
+
